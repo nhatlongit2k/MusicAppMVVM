@@ -1,22 +1,26 @@
-package com.example.musicapp
+package com.example.musicapp.ui.activity
 
+import android.app.ActivityManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.media.MediaPlayer
-import android.net.Uri
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
-import android.widget.Button
 import android.widget.ImageButton
 import android.widget.SeekBar
 import android.widget.TextView
+import androidx.fragment.app.Fragment
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
-import java.io.File
+import androidx.viewpager2.widget.ViewPager2
+import com.example.musicapp.service.MyService
+import com.example.musicapp.R
+import com.example.musicapp.Song
+import com.example.musicapp.adapter.AdapterViewPager
+import com.example.musicapp.ui.fragment.MusicAnimFragment
+import com.example.musicapp.ui.fragment.RelatedMusicFragment
 import java.text.SimpleDateFormat
-import kotlin.concurrent.timer
 
 class PlayMusicActivity : AppCompatActivity() {
 
@@ -30,8 +34,14 @@ class PlayMusicActivity : AppCompatActivity() {
     lateinit var tvTimeOfSong: TextView
     lateinit var tvTimeSongPlay: TextView
     lateinit var sbTimeSongPlay: SeekBar
+
+    lateinit var viewPager: ViewPager2
     var position: Int = 0
-    lateinit var listSong : ArrayList<File>
+
+    lateinit var listSong1 : ArrayList<Song>
+
+
+
     var duration: Int = 0
     var currentTimeOfSong: Int = 0
 
@@ -54,7 +64,7 @@ class PlayMusicActivity : AppCompatActivity() {
 //            }
 //            var songUri = p1?.getStringExtra("song_uri")
             position = p1!!.getIntExtra("position", 0)
-            listSong = p1.getSerializableExtra("list_song") as ArrayList<File>
+            listSong1 = p1.getSerializableExtra("list_song") as ArrayList<Song>
             isPlaying = p1.getBooleanExtra("status_player", false)
             var actionMusic = p1.getIntExtra("action_music", 0)
             duration = p1.getIntExtra("music_duration", 0)
@@ -72,11 +82,6 @@ class PlayMusicActivity : AppCompatActivity() {
 
         initView()
 
-//        if(mediaPlayer != null){
-//            mediaPlayer.stop()
-//            mediaPlayer.release()
-//        }
-
         btNext.setOnClickListener {
             sendActionToService(MyService.ACTION_NEXT)
         }
@@ -87,12 +92,10 @@ class PlayMusicActivity : AppCompatActivity() {
             if(isShuffle == true){
                 btShuffle.setImageResource(R.drawable.ic_baseline_shuffle_24)
                 isShuffle = false
-                Log.d("TAG", "isShuffle: $isShuffle")
                 sendActionToService(MyService.ACTION_NO_SHUFFLE)
             }else{
                 btShuffle.setImageResource(R.drawable.ic_baseline_shuffle_true)
                 isShuffle = true
-                Log.d("TAG", "isShuffle: $isShuffle")
                 sendActionToService(MyService.ACTION_SHUFFLE)
             }
         }
@@ -100,7 +103,13 @@ class PlayMusicActivity : AppCompatActivity() {
             if(isPlaying == true){
                 sendActionToService(MyService.ACTION_PAUSE)
             }else{
-                sendActionToService(MyService.ACTION_RESUME)
+                if(isMyServiceRunning(MyService::class.java)==false){
+                    Log.d("TAG", "list song: ${listSong1.size}")
+                    Log.d("TAG", "position: $position")
+                    startService()
+                }else{
+                    sendActionToService(MyService.ACTION_RESUME)
+                }
             }
         }
         setRepeat()
@@ -133,30 +142,40 @@ class PlayMusicActivity : AppCompatActivity() {
         tvTimeOfSong = findViewById(R.id.tv_time_of_song)
         tvTimeSongPlay = findViewById(R.id.tv_time_song_play)
         sbTimeSongPlay = findViewById(R.id.sb_time_song_play)
+        viewPager = findViewById(R.id.viewpager_song)
 
         var intent = intent
         var bundle: Bundle? = intent.extras
         if (bundle != null) {
-            listSong = intent.getSerializableExtra("listSong") as ArrayList<File>
-            position = bundle.getInt("position", 0)
-            tvSongName.setText(listSong[position].name.replace(".mp3", "").replace(".wav", ""))
-
-//            var uri: Uri = Uri.parse(listSong[position].toString())
-//            mediaPlayer = MediaPlayer.create(applicationContext, uri)
-//            mediaPlayer.start()
-            stopService()
-            startService()
+            var how_to_start: String? = bundle.getString("how_to_start")
+            if(how_to_start.equals("just_open")){
+                position = bundle.getInt("position", 0)
+                listSong1 = intent.getSerializableExtra("list_song1") as ArrayList<Song>
+                tvSongName.setText(listSong1[position].title)
+                duration = bundle.getInt("music_duration")
+                isPlaying = bundle.getBoolean("status_player")
+//                setStatusStartMusic()
+//                updateTime()
+//                setStatusPlayOrPause()
+                sendActionToService(MyService.ACTION_GET_INFOR_FOR_PLAY_ACTIVITY)
+            }else{
+                position = bundle.getInt("position", 0)
+                listSong1 = intent.getSerializableExtra("list_song1") as ArrayList<Song>
+                tvSongName.setText(listSong1[position].title)
+                stopService()
+                startService()
+            }
         }
+        setUpViewPager()
     }
 
     fun startService(){
-        //var song = Song(listSong[position].name.toString(), listSong[position].toString())
         var intent = Intent(this, MyService::class.java)
-//        var bundle: Bundle = Bundle()
-//        bundle.putString("song_uri", listSong[position].toString())
-        intent.putExtra("list_song", listSong)
-        intent.putExtra("song_uri", listSong[position].toString())
         intent.putExtra("position", position)
+
+        //newcode
+        intent.putExtra("list_song1", listSong1)
+        intent.putExtra("song_uri", listSong1[position].resource)
         startService(intent)
     }
 
@@ -166,23 +185,32 @@ class PlayMusicActivity : AppCompatActivity() {
     }
     private fun handleMusicFromService(action: Int){
         when(action){
-            MyService.ACTION_START->{
+            MyService.ACTION_START ->{
                 setStatusStartMusic()
             }
-            MyService.ACTION_PAUSE->{
+            MyService.ACTION_PAUSE ->{
                 setStatusPlayOrPause()
             }
-            MyService.ACTION_RESUME->{
+            MyService.ACTION_RESUME ->{
                 setStatusPlayOrPause()
             }
-            MyService.ACTION_NEXT->{
+            MyService.ACTION_NEXT ->{
                 nextMusic()
             }
-            MyService.ACTION_PREVIOUS->{
+            MyService.ACTION_PREVIOUS ->{
                 previousMusic()
             }
-            MyService.ACTION_UPDATE_CURRENT_TIME->{
+            MyService.ACTION_UPDATE_CURRENT_TIME ->{
                 updateCurTime()
+            }
+            MyService.ACTION_GET_INFOR_FOR_PLAY_ACTIVITY ->{
+                tvSongName.setText(listSong1[position].title)
+                setUpViewPager()
+                setStatusPlayOrPause()
+                updateTime()
+            }
+            MyService.ACTION_STOP ->{
+                btPlayOrPause.setImageResource(R.drawable.ic_baseline_play_arrow_24)
             }
         }
     }
@@ -194,20 +222,23 @@ class PlayMusicActivity : AppCompatActivity() {
     }
 
     private fun setStatusStartMusic() {
-        tvSongName.setText(listSong[position].name.replace(".mp3", "").replace(".wav", ""))
+        tvSongName.setText(listSong1[position].title)
         btPlayOrPause.setImageResource(R.drawable.ic_baseline_pause_24)
         updateTime()
+        setUpViewPager()
     }
 
     private fun nextMusic(){
-        tvSongName.setText(listSong[position].name.replace(".mp3", "").replace(".wav", ""))
+        tvSongName.setText(listSong1[position].title)
         btPlayOrPause.setImageResource(R.drawable.ic_baseline_pause_24)
         updateTime()
+        setUpViewPager()
     }
     private fun previousMusic(){
-        tvSongName.setText(listSong[position].name.replace(".mp3", "").replace(".wav", ""))
+        tvSongName.setText(listSong1[position].title)
         btPlayOrPause.setImageResource(R.drawable.ic_baseline_pause_24)
         updateTime()
+        setUpViewPager()
     }
 
     private fun updateTime(){
@@ -232,6 +263,14 @@ class PlayMusicActivity : AppCompatActivity() {
             btPlayOrPause.setImageResource(R.drawable.ic_baseline_play_arrow_24)
         }
     }
+    fun setUpViewPager(){
+        var listFrag : ArrayList<Fragment> = arrayListOf(
+            MusicAnimFragment(),
+            RelatedMusicFragment()
+        )
+        val adapter = AdapterViewPager(listFrag, this)
+        viewPager.adapter = adapter
+    }
 
     private fun setRepeat(){
         if(statusRepeat > 2){
@@ -251,8 +290,28 @@ class PlayMusicActivity : AppCompatActivity() {
         }
     }
 
+    private fun isMyServiceRunning(serviceClass: Class<*>): Boolean {
+        val manager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        for (service in manager.getRunningServices(Int.MAX_VALUE)) {
+            if (serviceClass.name == service.service.className) {
+                return true
+            }
+        }
+        return false
+    }
+
     override fun onDestroy() {
-        super.onDestroy()
         LocalBroadcastManager.getInstance(this).unregisterReceiver(broadcastReceiver)
+        super.onDestroy()
+    }
+
+    override fun onBackPressed() {
+        setResult(111)
+        finish()
+        if(MainActivity.active == false){
+            val intent = Intent(this, MainActivity::class.java)
+            startActivity(intent)
+        }
+        super.onBackPressed()
     }
 }

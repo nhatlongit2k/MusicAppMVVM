@@ -2,22 +2,28 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.example.musicapp">
 
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <application
-        android:name=".MyApplication"
+        android:name=".service.MyApplication"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.MusicApp">
+        android:theme="@style/Theme.MusicApp"
+        android:usesCleartextTraffic="true">
         <activity
-            android:name=".PlayMusicActivity"
+            android:name="com.example.musicapp.ui.activity.SearchMusicActivity"
+            android:exported="false" />
+        <activity
+            android:name="com.example.musicapp.ui.activity.PlayMusicActivity"
             android:exported="true" />
         <activity
-            android:name=".MainActivity"
+            android:name="com.example.musicapp.ui.activity.MainActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -26,8 +32,10 @@
             </intent-filter>
         </activity>
 
-        <service android:name=".MyService"/>
-        <receiver android:name=".MyReceiver"/>
+        <service android:name=".service.MyService"
+            android:exported="false"/>
+
+        <receiver android:name=".service.MyReceiver" />
     </application>
 
 </manifest>
